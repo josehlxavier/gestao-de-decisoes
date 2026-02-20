@@ -61,10 +61,7 @@ export default function IssuesPage() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [search, setSearch] = useState('')
 
-  useEffect(() => { loadAll() }, [])
-
   async function loadAll() {
-    setLoading(true)
     const [i, g] = await Promise.all([
       supabase.from('issues').select('*, working_groups(name)').order('score', { ascending: false }),
       supabase.from('working_groups').select('id, name').order('name'),
@@ -73,6 +70,10 @@ export default function IssuesPage() {
     setGroups(g.data || [])
     setLoading(false)
   }
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { loadAll() }, [])
+
 
   function openNew() { setEditing(null); setForm(EMPTY); setOpen(true) }
   function openEdit(issue) {

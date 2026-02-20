@@ -33,10 +33,7 @@ export default function MeetingsPage() {
   const [search, setSearch] = useState('')
   const [filterGroup, setFilterGroup] = useState('all')
 
-  useEffect(() => { loadAll() }, [])
-
   async function loadAll() {
-    setLoading(true)
     const [m, g] = await Promise.all([
       supabase.from('meetings').select('*, working_groups(name)').order('date', { ascending: false }),
       supabase.from('working_groups').select('id, name').order('name'),
@@ -45,6 +42,10 @@ export default function MeetingsPage() {
     setGroups(g.data || [])
     setLoading(false)
   }
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { loadAll() }, [])
+
 
   function openNew() { setEditing(null); setForm(EMPTY); setOpen(true) }
   function openEdit(m) {
