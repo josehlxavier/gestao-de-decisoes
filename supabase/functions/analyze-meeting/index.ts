@@ -75,12 +75,13 @@ Deno.serve(async (req: Request) => {
     })
   }
 
-  const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! })
+  try {
+    const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! })
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
-    system: `Você é um especialista em análise de atas de reunião corporativas do setor financeiro/bancário.
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      system: `Você é um especialista em análise de atas de reunião corporativas do setor financeiro/bancário.
 
 Sua função é identificar com precisão:
 
@@ -94,37 +95,48 @@ Regras importantes:
 - Contexto das decisões deve capturar o racional ou impacto mencionado
 - Tags devem ser palavras-chave relevantes (tecnologias, áreas, siglas do setor)
 - Se não houver decisões ou tarefas claras, retorne arrays vazios`,
-    messages: [
-      {
-        role: 'user',
-        content: `Analise a ata abaixo e extraia as decisões e planos de ação:
+      tools: [
+        {
+          name: 'extrair_dados_ata',
+          description: 'Extrai decisões e planos de ação de uma ata de reunião.',
+          input_schema: ANALYSIS_SCHEMA,
+        },
+      ],
+      tool_choice: { type: 'tool', name: 'extrair_dados_ata' },
+      messages: [
+        {
+          role: 'user',
+          content: `Analise a ata abaixo e extraia as decisões e planos de ação:
 
 Título da reunião: ${title}
 Grupo de Trabalho: ${workingGroup || 'Não informado'}
 
 Conteúdo da ata:
 ${summary}`,
-      },
-    ],
-    output_config: {
-      format: {
-        type: 'json_schema',
-        schema: ANALYSIS_SCHEMA,
-      },
-    },
-  })
+        },
+      ],
+    })
 
-  const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
-  if (!textBlock || textBlock.type !== 'text') {
-    return new Response(JSON.stringify({ error: 'Resposta inesperada do modelo' }), {
+    const toolUseBlock = response.content.find(
+      (b: { type: string }) => b.type === 'tool_use',
+    )
+    if (!toolUseBlock || toolUseBlock.type !== 'tool_use') {
+      return new Response(JSON.stringify({ error: 'Resposta inesperada do modelo' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const result = (toolUseBlock as { type: 'tool_use'; input: unknown }).input
+
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Erro interno do servidor'
+    return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
-
-  const result = JSON.parse(textBlock.text)
-
-  return new Response(JSON.stringify(result), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
 })
