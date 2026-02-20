@@ -109,7 +109,6 @@ ${summary}`,
     output_config: {
       format: {
         type: 'json_schema',
-        name: 'meeting_analysis',
         schema: ANALYSIS_SCHEMA,
       },
     },

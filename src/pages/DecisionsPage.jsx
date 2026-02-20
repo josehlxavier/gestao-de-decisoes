@@ -16,10 +16,7 @@ export default function DecisionsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
-  useEffect(() => { load() }, [])
-
   async function load() {
-    setLoading(true)
     const { data } = await supabase
       .from('decisions')
       .select('*, meetings(title, date, working_group_id, working_groups(name))')
@@ -27,6 +24,10 @@ export default function DecisionsPage() {
     setDecisions(data || [])
     setLoading(false)
   }
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { load() }, [])
+
 
   const filtered = decisions.filter((d) => {
     const q = search.toLowerCase()

@@ -32,10 +32,7 @@ export default function TasksPage() {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
 
-  useEffect(() => { load() }, [])
-
   async function load() {
-    setLoading(true)
     const { data } = await supabase
       .from('tasks')
       .select('*, users(name), meetings(title, id, working_groups(name))')
@@ -43,6 +40,10 @@ export default function TasksPage() {
     setTasks(data || [])
     setLoading(false)
   }
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { load() }, [])
+
 
   async function updateStatus(id, status) {
     await supabase.from('tasks').update({ status }).eq('id', id)

@@ -29,14 +29,15 @@ export default function WorkingGroupsPage() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
 
-  useEffect(() => { load() }, [])
-
   async function load() {
-    setLoading(true)
     const { data } = await supabase.from('working_groups').select('*').order('created_at', { ascending: false })
     setGroups(data || [])
     setLoading(false)
   }
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { load() }, [])
+
 
   function openNew() { setEditing(null); setForm(EMPTY); setOpen(true) }
   function openEdit(g) { setEditing(g); setForm({ name: g.name, description: g.description || '' }); setOpen(true) }

@@ -24,17 +24,8 @@ const navItems = [
   { to: '/issues', icon: AlertTriangle, label: 'Matriz GUT' },
 ]
 
-export default function Sidebar() {
-  const { profile, signOut } = useAuth()
-  const navigate = useNavigate()
-  const [mobileOpen, setMobileOpen] = useState(false)
-
-  async function handleSignOut() {
-    await signOut()
-    navigate('/login')
-  }
-
-  const SidebarContent = () => (
+function SidebarContent({ profile, onSignOut, onNavClick }) {
+  return (
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center gap-2 px-6 py-5 border-b border-blue-700">
@@ -53,7 +44,7 @@ export default function Sidebar() {
           <NavLink
             key={item.to}
             to={item.to}
-            onClick={() => setMobileOpen(false)}
+            onClick={onNavClick}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group',
@@ -85,7 +76,7 @@ export default function Sidebar() {
             <p className="text-blue-300 text-xs truncate">{profile?.role || 'member'}</p>
           </div>
           <button
-            onClick={handleSignOut}
+            onClick={onSignOut}
             className="text-blue-300 hover:text-white transition-colors p-1 rounded"
             title="Sair"
           >
@@ -95,12 +86,23 @@ export default function Sidebar() {
       </div>
     </div>
   )
+}
+
+export default function Sidebar() {
+  const { profile, signOut } = useAuth()
+  const navigate = useNavigate()
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  async function handleSignOut() {
+    await signOut()
+    navigate('/login')
+  }
 
   return (
     <>
       {/* Sidebar desktop */}
       <aside className="hidden lg:flex flex-col w-64 bg-blue-800 min-h-screen flex-shrink-0">
-        <SidebarContent />
+        <SidebarContent profile={profile} onSignOut={handleSignOut} onNavClick={() => setMobileOpen(false)} />
       </aside>
 
       {/* Botão mobile */}
@@ -125,7 +127,7 @@ export default function Sidebar() {
             >
               <X className="w-5 h-5" />
             </button>
-            <SidebarContent />
+            <SidebarContent profile={profile} onSignOut={handleSignOut} onNavClick={() => setMobileOpen(false)} />
           </aside>
         </div>
       )}
