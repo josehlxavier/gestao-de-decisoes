@@ -78,9 +78,8 @@ Deno.serve(async (req: Request) => {
   const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! })
 
   const response = await anthropic.messages.create({
-    model: 'claude-opus-4-6',
+    model: 'claude-sonnet-4-6',
     max_tokens: 4096,
-    thinking: { type: 'adaptive' },
     system: `Você é um especialista em análise de atas de reunião corporativas do setor financeiro/bancário.
 
 Sua função é identificar com precisão:
