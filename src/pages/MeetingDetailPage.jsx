@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select'
 import {
   ArrowLeft, Plus, Pencil, Trash2, BookOpen, CheckSquare, Calendar,
-  User, Tag, X,
+  User, Tag, X, Sparkles,
 } from 'lucide-react'
 
 function formatDate(d) {
@@ -51,6 +51,15 @@ export default function MeetingDetailPage() {
   const [tEditing, setTEditing] = useState(null)
   const [tForm, setTForm] = useState({ title: '', description: '', status: 'Pendente', assignee_id: '', due_date: '' })
   const [tSaving, setTSaving] = useState(false)
+
+  // AI analysis
+  const [aiAnalyzing, setAiAnalyzing] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiResults, setAiResults] = useState({ decisions: [], tasks: [] })
+  const [aiSelectedDecisions, setAiSelectedDecisions] = useState(new Set())
+  const [aiSelectedTasks, setAiSelectedTasks] = useState(new Set())
+  const [aiSaving, setAiSaving] = useState(false)
+  const [aiError, setAiError] = useState('')
 
   useEffect(() => { loadAll() }, [id])
 
@@ -133,6 +142,70 @@ export default function MeetingDetailPage() {
     setTasks((prev) => prev.map((t) => (t.id === tid ? { ...t, status } : t)))
   }
 
+  // --- AI Analysis ---
+  async function analyzeWithAI() {
+    if (!meeting?.summary?.trim()) return
+    setAiAnalyzing(true)
+    setAiError('')
+    try {
+      const { data, error } = await supabase.functions.invoke('analyze-meeting', {
+        body: {
+          summary: meeting.summary,
+          title: meeting.title,
+          workingGroup: meeting.working_groups?.name || '',
+        },
+      })
+      if (error) throw new Error(error.message || 'Erro ao contatar o serviço de análise')
+      if (!data || (!data.decisions && !data.tasks)) throw new Error('Resposta inválida do serviço')
+      const results = { decisions: data.decisions || [], tasks: data.tasks || [] }
+      setAiResults(results)
+      setAiSelectedDecisions(new Set(results.decisions.map((_, i) => i)))
+      setAiSelectedTasks(new Set(results.tasks.map((_, i) => i)))
+      setAiOpen(true)
+    } catch (err) {
+      setAiError(err.message)
+    } finally {
+      setAiAnalyzing(false)
+    }
+  }
+
+  function toggleAiDecision(i) {
+    setAiSelectedDecisions((prev) => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i)
+      else next.add(i)
+      return next
+    })
+  }
+
+  function toggleAiTask(i) {
+    setAiSelectedTasks((prev) => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i)
+      else next.add(i)
+      return next
+    })
+  }
+
+  async function saveAIResults() {
+    setAiSaving(true)
+    const decisionsToSave = aiResults.decisions
+      .filter((_, i) => aiSelectedDecisions.has(i))
+      .map((d) => ({ title: d.title, context: d.context, tags: d.tags, meeting_id: id }))
+    const tasksToSave = aiResults.tasks
+      .filter((_, i) => aiSelectedTasks.has(i))
+      .map((t) => ({ title: t.title, description: t.description, status: 'Pendente', meeting_id: id }))
+    await Promise.all([
+      decisionsToSave.length > 0 && supabase.from('decisions').insert(decisionsToSave),
+      tasksToSave.length > 0 && supabase.from('tasks').insert(tasksToSave),
+    ])
+    setAiSaving(false)
+    setAiOpen(false)
+    loadAll()
+  }
+
+  const aiTotalSelected = aiSelectedDecisions.size + aiSelectedTasks.size
+
   if (loading) {
     return (
       <div className="flex justify-center py-20">
@@ -179,6 +252,31 @@ export default function MeetingDetailPage() {
                   <Calendar className="w-4 h-4" /> {formatDate(meeting.date)}
                 </span>
               </div>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={analyzeWithAI}
+                disabled={aiAnalyzing || !meeting.summary?.trim()}
+                className="border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-300 disabled:opacity-50"
+                title={!meeting.summary?.trim() ? 'Adicione um resumo à ata para usar a análise' : 'Identificar decisões e planos de ação automaticamente'}
+              >
+                {aiAnalyzing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                    Analisando...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Auto-detectar com IA
+                  </>
+                )}
+              </Button>
+              {aiError && (
+                <p className="text-xs text-red-500 max-w-xs text-right">{aiError}</p>
+              )}
             </div>
           </div>
           {meeting.summary && (
@@ -353,6 +451,117 @@ export default function MeetingDetailPage() {
             <Button variant="outline" onClick={() => setDOpen(false)}>Cancelar</Button>
             <Button onClick={saveDecision} disabled={dSaving || !dForm.title.trim()}>
               {dSaving ? 'Salvando...' : dEditing ? 'Salvar' : 'Registrar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AI Analysis Preview Dialog */}
+      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-purple-600" />
+              Itens detectados pela IA
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-500 -mt-2 mb-4">
+            Selecione os itens que deseja importar. Você poderá editá-los após salvar.
+          </p>
+
+          {/* Detected Decisions */}
+          {aiResults.decisions.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                <BookOpen className="w-4 h-4 text-blue-500" />
+                Decisões ({aiResults.decisions.length})
+              </h3>
+              {aiResults.decisions.map((d, i) => (
+                <label
+                  key={i}
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    aiSelectedDecisions.has(i)
+                      ? 'border-blue-200 bg-blue-50'
+                      : 'border-gray-200 bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 accent-blue-600 flex-shrink-0"
+                    checked={aiSelectedDecisions.has(i)}
+                    onChange={() => toggleAiDecision(i)}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{d.title}</p>
+                    {d.context && (
+                      <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{d.context}</p>
+                    )}
+                    {d.tags?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {d.tags.map((tag) => (
+                          <span key={tag} className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {/* Detected Tasks */}
+          {aiResults.tasks.length > 0 && (
+            <div className="space-y-3 mt-5">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                <CheckSquare className="w-4 h-4 text-green-500" />
+                Planos de Ação ({aiResults.tasks.length})
+              </h3>
+              {aiResults.tasks.map((t, i) => (
+                <label
+                  key={i}
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    aiSelectedTasks.has(i)
+                      ? 'border-green-200 bg-green-50'
+                      : 'border-gray-200 bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 accent-green-600 flex-shrink-0"
+                    checked={aiSelectedTasks.has(i)}
+                    onChange={() => toggleAiTask(i)}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{t.title}</p>
+                    {t.description && (
+                      <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{t.description}</p>
+                    )}
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {aiResults.decisions.length === 0 && aiResults.tasks.length === 0 && (
+            <div className="text-center py-8 text-gray-400">
+              <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Nenhum item identificado na ata.</p>
+              <p className="text-xs mt-1">Tente adicionar mais detalhes ao resumo da reunião.</p>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 mt-6">
+            <Button variant="outline" onClick={() => setAiOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={saveAIResults}
+              disabled={aiSaving || aiTotalSelected === 0}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {aiSaving ? 'Salvando...' : `Importar selecionados (${aiTotalSelected})`}
             </Button>
           </DialogFooter>
         </DialogContent>
